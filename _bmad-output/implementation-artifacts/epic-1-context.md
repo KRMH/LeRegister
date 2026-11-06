@@ -16,6 +16,7 @@ The Owner (a single person) logs a phone booking in a Telegram message, either a
 - Story 1.6: Turn free text into a proposed `New` Command
 - Story 1.7: Confirm before anything is recorded
 - Story 1.8: Keep working when the model does not
+- Story 1.9: Ask for what is missing
 
 ## Requirements & Constraints
 
@@ -25,6 +26,7 @@ The Owner (a single person) logs a phone booking in a Telegram message, either a
 - Only the Owner's Telegram account is accepted; everyone else is ignored silently, with no reply and no data change. Owner id is set in configuration, never via chat.
 - A command that fails unexpectedly is reported to the Owner, never silently dropped.
 - Free text: an LLM may only propose a command. The deterministic parser stays the only authority on validity. Nothing is recorded until the Owner confirms. If the LLM is unavailable, strict commands still work.
+- Incomplete plain-words bookings: the Bot keeps a short-lived draft (10 minutes, one per Owner, at most 3 questions) and asks for the first missing part; the next message fills only what is missing. Relative dates are never guessed. The phone stays local and is never sent to the model; the model may see the name, chalet and dates already understood.
 - Cost must be zero or near zero; official Telegram Bot API and libraries only.
 - Message text is untrusted data, never instructions. The parser has no AI model inside it. The model gets only the Owner's message and the command schema, never stored data, and has no tools.
 - No user-facing path deletes data.
@@ -49,4 +51,5 @@ The Owner (a single person) logs a phone booking in a Telegram message, either a
 
 - 1.1 provides the scaffold, config and Owner gate. 1.3 provides journal, outbox and de-duplication. 1.4 adds `bookings` and `clients`. 1.5 hardens the transaction and reply path.
 - 1.6 adds the `Interpreter` port and adapter; its proposals feed the same parser and `core` use case as typed commands. 1.7 adds the `proposals` table and the confirm flow that 1.6 hands over to. 1.8 degrades 1.6 and 1.7 gracefully when the model is down.
+- 1.9 builds on 1.6 (Interpreter, redaction, strict parser) and adds a `drafts` side table; it does not need 1.7 and is built first. A completed draft is handled like any proposal: shown as the strict command today, confirmed with buttons once 1.7 exists.
 - Stories 2.5, 2.6 and 3.3 extend the Interpreter schema and reuse the 1.7 confirmation flow. Epics 2-6 reuse the parser, journal, outbox, store and renderer built here.
