@@ -53,3 +53,12 @@ forbidden_modules = [
     "apscheduler",
 ]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "adapters do not import each other"
+type = "independence"
+modules = [
+    "leregister.adapters.telegram",
+    "leregister.adapters.store",
+    "leregister.adapters.clock",
+]

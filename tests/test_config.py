@@ -69,3 +69,15 @@ def test_invalid_optional_numbers(key, bad, tmp_path):
 def test_optional_overrides(tmp_path):
     s = load({**BASE, "LEREGISTER_CHALET_COUNT": "12", "LEREGISTER_MAX_STAY": "10"}, tmp_path)
     assert (s.chalet_count, s.max_stay) == (12, 10)
+
+
+def test_db_path_default_override_and_tilde_expansion(tmp_path):
+    from pathlib import Path
+
+    from leregister.config import DEFAULT_DB_PATH, Settings
+
+    base = {"LEREGISTER_BOT_TOKEN": "1:a", "LEREGISTER_OWNER_ID": "1", "LEREGISTER_ENV_FILE": str(tmp_path / "none")}
+    assert Settings.load(base).db_path == DEFAULT_DB_PATH
+    assert Settings.load({**base, "LEREGISTER_DB_PATH": "  "}).db_path == DEFAULT_DB_PATH
+    assert Settings.load({**base, "LEREGISTER_DB_PATH": str(tmp_path / "x.db")}).db_path == tmp_path / "x.db"
+    assert Settings.load({**base, "LEREGISTER_DB_PATH": "~/x.db"}).db_path == Path.home() / "x.db"

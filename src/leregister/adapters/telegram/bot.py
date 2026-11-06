@@ -1,4 +1,4 @@
-"""Telegram adapter: long polling, Owner gate, `New` command replies."""
+"""Telegram adapter: long polling, Owner gate, records each Command, drains the reply outbox."""
 
 from __future__ import annotations
 
@@ -7,24 +7,35 @@ import logging
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
+from leregister.adapters.telegram.drainer import TelegramDrainer
 from leregister.config import Settings
 from leregister.core.access import is_owner
-from leregister.core.parser import ParsedNew, parse_command
-from leregister.core.ports import Clock
-from leregister.core.replies import reject_reply, understood_reply
+from leregister.core.commands import decide, edited_message_decision
+from leregister.core.ports import Clock, OutboxQueue, Store
 
 log = logging.getLogger(__name__)
 
+RETRY_INTERVAL_SECONDS = 5
 
-def build_application(settings: Settings, clock: Clock) -> Application:
+
+def build_application(settings: Settings, clock: Clock, store: Store, queue: OutboxQueue) -> Application:
     app = ApplicationBuilder().token(settings.bot_token).build()
     app.bot_data["owner_id"] = settings.owner_id
     app.bot_data["clock"] = clock
     app.bot_data["chalet_count"] = settings.chalet_count
     app.bot_data["max_stay"] = settings.max_stay
+    app.bot_data["store"] = store
+    app.bot_data["drainer"] = TelegramDrainer(queue, clock, lambda chat_id, text: app.bot.send_message(chat_id, text))
     app.add_handler(MessageHandler(filters.ALL, handle_update))
     app.add_error_handler(handle_error)
+    if app.job_queue is not None:
+        app.job_queue.run_repeating(retry_outbox, interval=RETRY_INTERVAL_SECONDS, first=RETRY_INTERVAL_SECONDS)
     return app
+
+
+async def retry_outbox(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pick up rows whose backoff has passed."""
+    await context.bot_data["drainer"].drain()
 
 
 async def handle_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -45,14 +56,23 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # ids only: never names, phones or text
         log.info("ignored update from user_id=%s chat_id=%s", user_id, chat.id if chat else None)
         return
-    if message is None:
+    if message is None or chat is None:
         return
-    result = parse_command(
-        message.text or "",
-        clock=context.bot_data["clock"],
-        chalet_count=context.bot_data["chalet_count"],
-        max_stay=context.bot_data["max_stay"],
-    )
-    # Story 1.2: a valid New is only echoed back, never saved (Story 1.4 records it).
-    reply = understood_reply(result) if isinstance(result, ParsedNew) else reject_reply(result)
-    await message.reply_text(reply)
+
+    clock: Clock = context.bot_data["clock"]
+    if update.edited_message is not None:
+        decision = edited_message_decision()
+    else:
+        decision = decide(
+            message.text or "",
+            update_id=update.update_id,
+            clock=clock,
+            chalet_count=context.bot_data["chalet_count"],
+            max_stay=context.bot_data["max_stay"],
+        )
+    store: Store = context.bot_data["store"]
+    recorded = await store.record_command(update.update_id, chat.id, decision, clock.now())
+    if not recorded:
+        log.info("duplicate update ignored update_id=%s", update.update_id)
+        return
+    await context.bot_data["drainer"].drain()

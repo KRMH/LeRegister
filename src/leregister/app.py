@@ -8,6 +8,7 @@ import sys
 from telegram.error import InvalidToken
 
 from leregister.adapters.clock import SystemClock
+from leregister.adapters.store import SqliteStore, StoreError
 from leregister.adapters.telegram.bot import build_application
 from leregister.config import ConfigError, Settings
 
@@ -22,11 +23,19 @@ def main() -> None:
     except ConfigError as exc:
         print(f"LeRegister cannot start: {exc}", file=sys.stderr)
         raise SystemExit(2) from None
+    store = SqliteStore(settings.db_path)
     try:
-        build_application(settings, SystemClock()).run_polling()
+        store.open()
+    except StoreError as exc:
+        print(f"LeRegister cannot start: {exc}", file=sys.stderr)
+        raise SystemExit(2) from None
+    try:
+        build_application(settings, SystemClock(), store, store).run_polling()
     except InvalidToken:
         print("LeRegister cannot start: the bot token was rejected by Telegram", file=sys.stderr)
         raise SystemExit(2) from None
+    finally:
+        store.close()
 
 
 if __name__ == "__main__":

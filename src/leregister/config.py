@@ -9,6 +9,7 @@ from pathlib import Path
 
 DEFAULT_ENV_FILE = Path.home() / ".leregister" / ".env"
 ENV_FILE_VAR = "LEREGISTER_ENV_FILE"
+DEFAULT_DB_PATH = Path.home() / ".leregister" / "leregister.db"
 
 
 class ConfigError(Exception):
@@ -21,6 +22,7 @@ class Settings:
     owner_id: int
     chalet_count: int = 40
     max_stay: int = 60
+    db_path: Path = DEFAULT_DB_PATH
 
     @classmethod
     def load(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -32,6 +34,7 @@ class Settings:
             owner_id=_integer(merged, "LEREGISTER_OWNER_ID", required=True),
             chalet_count=_integer(merged, "LEREGISTER_CHALET_COUNT", default=40),
             max_stay=_integer(merged, "LEREGISTER_MAX_STAY", default=60),
+            db_path=_db_path(merged),
         )
 
 
@@ -88,3 +91,8 @@ def _integer(
     if value <= 0:
         raise ConfigError(f"Setting {key} must be positive")
     return value
+
+
+def _db_path(env: Mapping[str, str]) -> Path:
+    value = env.get("LEREGISTER_DB_PATH", "").strip()
+    return Path(value).expanduser() if value else DEFAULT_DB_PATH

@@ -21,6 +21,7 @@ Set as environment variables, or in a `.env` file. The default `.env` location i
 | `LEREGISTER_OWNER_ID` | yes | | Owner's numeric Telegram user id. Only this account is answered |
 | `LEREGISTER_CHALET_COUNT` | no | 40 | Number of chalets |
 | `LEREGISTER_MAX_STAY` | no | 60 | Maximum stay in nights |
+| `LEREGISTER_DB_PATH` | no | `~/.leregister/leregister.db` | SQLite database file. Keep it outside the repository |
 
 Use a separate bot token for development and tests.
 
