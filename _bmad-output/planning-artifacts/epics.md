@@ -423,7 +423,7 @@ So that I can answer in my next message instead of writing the whole booking aga
 
 **Given** a draft is waiting
 **When** the Owner's next message arrives and does not start with `New`
-**Then** it is read as the answer to the question: it fills only the missing part, the rest of the draft is kept, and the result goes through the same validation, strict parser and confirmation as any proposal (Stories 1.6 and 1.7).
+**Then** it is read as the answer to the question: it fills only the missing part, the rest of the draft is kept, and the result goes through the same validation and strict parser as any proposal (Story 1.6) and is handled exactly like one: today the Bot shows the strict command to send, and once Story 1.7 exists it asks for confirmation.
 
 **Given** the phone number of a draft
 **When** the draft is stored and the model is called
@@ -447,7 +447,7 @@ So that I can answer in my next message instead of writing the whole booking aga
 
 **Given** the model is unavailable
 **When** a draft is waiting and the Owner answers
-**Then** the Bot replies as in Story 1.8 and keeps the draft until it expires.
+**Then** the Bot replies that free text is unavailable, as in Story 1.6, and keeps the draft until it expires.
 
 ## Epic 2: Catch overlaps, cancel and change
 
