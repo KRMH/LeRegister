@@ -10,9 +10,10 @@ from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageH
 from leregister.adapters.telegram.drainer import TelegramDrainer
 from leregister.config import Settings
 from leregister.core.access import is_owner
-from leregister.core.commands import decide, edited_message_decision
+from leregister.core.commands import decide, decide_free_text, edited_message_decision
 from leregister.core.events import ReplyRequest
-from leregister.core.ports import Clock, OutboxQueue, Store
+from leregister.core.interpret import is_free_text
+from leregister.core.ports import Clock, Interpreter, OutboxQueue, Store
 from leregister.core.replies import render
 
 log = logging.getLogger(__name__)
@@ -20,8 +21,23 @@ log = logging.getLogger(__name__)
 RETRY_INTERVAL_SECONDS = 5
 
 
-def build_application(settings: Settings, clock: Clock, store: Store, queue: OutboxQueue) -> Application:
-    app = ApplicationBuilder().token(settings.bot_token).build()
+def build_application(
+    settings: Settings,
+    clock: Clock,
+    store: Store,
+    queue: OutboxQueue,
+    interpreter: Interpreter | None = None,
+) -> Application:
+    builder = ApplicationBuilder().token(settings.bot_token)
+    close_interpreter = getattr(interpreter, "aclose", None)
+    if close_interpreter is not None:
+
+        async def release_interpreter(_app: Application) -> None:
+            await close_interpreter()
+
+        builder = builder.post_shutdown(release_interpreter)
+    app = builder.build()
+    app.bot_data["interpreter"] = interpreter  # None: free text stays off
     app.bot_data["owner_id"] = settings.owner_id
     app.bot_data["clock"] = clock
     app.bot_data["chalet_count"] = settings.chalet_count
@@ -68,8 +84,19 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     clock: Clock = context.bot_data["clock"]
     store: Store = context.bot_data["store"]
     try:
+        text = message.text or ""
+        interpreter: Interpreter | None = context.bot_data.get("interpreter")
         if update.edited_message is not None:
             decision = edited_message_decision()
+        elif interpreter is not None and is_free_text(text):
+            decision = await decide_free_text(
+                text,
+                update_id=update.update_id,
+                clock=clock,
+                chalet_count=context.bot_data["chalet_count"],
+                max_stay=context.bot_data["max_stay"],
+                interpreter=interpreter,
+            )
         else:
             decision = decide(
                 message.text or "",

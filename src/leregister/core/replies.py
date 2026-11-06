@@ -12,6 +12,7 @@ EXAMPLE = "New 2 Sam +96171123456 12-15 dec"
 TELEGRAM_LIMIT = 4096
 EDIT_NOTICE = "Edits are not applied, please send a Change command instead"
 COMMAND_FAILED = "That command was not recorded. Please resend it."
+FREE_TEXT_UNAVAILABLE = f"Free text is unavailable right now. Please use the strict format, like: {EXAMPLE}"
 
 
 def reject_reply(rejected: Rejected) -> str:
@@ -47,6 +48,10 @@ def render(
         return EDIT_NOTICE
     if kind == "command_failed":
         return COMMAND_FAILED
+    if kind == "free_text_unavailable":
+        return FREE_TEXT_UNAVAILABLE
+    if kind == "free_text_proposal":
+        return f"I understood this, but nothing is saved yet. To record it, send exactly:\n{args['command']}"
     raise ValueError(f"unknown reply kind: {kind}")
 
 

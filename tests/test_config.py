@@ -81,3 +81,47 @@ def test_db_path_default_override_and_tilde_expansion(tmp_path):
     assert Settings.load({**base, "LEREGISTER_DB_PATH": "  "}).db_path == DEFAULT_DB_PATH
     assert Settings.load({**base, "LEREGISTER_DB_PATH": str(tmp_path / "x.db")}).db_path == tmp_path / "x.db"
     assert Settings.load({**base, "LEREGISTER_DB_PATH": "~/x.db"}).db_path == Path.home() / "x.db"
+
+
+def _llm_base(tmp_path):
+    return {"LEREGISTER_BOT_TOKEN": "1:a", "LEREGISTER_OWNER_ID": "1", "LEREGISTER_ENV_FILE": str(tmp_path / "none")}
+
+
+def test_free_text_is_off_without_a_key_and_has_sane_defaults(tmp_path):
+    from leregister.config import Settings
+
+    s = Settings.load(_llm_base(tmp_path))
+    assert s.llm_api_key is None and s.llm_provider == "groq"
+    assert s.llm_model == "llama-3.3-70b-versatile" and s.llm_timeout == 8.0
+
+
+def test_llm_settings_are_read_and_the_key_stays_out_of_repr(tmp_path):
+    from leregister.config import Settings
+
+    s = Settings.load(
+        {
+            **_llm_base(tmp_path),
+            "LEREGISTER_LLM_API_KEY": " gsk_secret ",
+            "LEREGISTER_LLM_MODEL": "openai/gpt-oss-20b",
+            "LEREGISTER_LLM_TIMEOUT": "3.5",
+            "LEREGISTER_LLM_PROVIDER": "GROQ",
+        }
+    )
+    assert (s.llm_api_key, s.llm_model, s.llm_timeout, s.llm_provider) == ("gsk_secret", "openai/gpt-oss-20b", 3.5, "groq")
+    assert "gsk_secret" not in repr(s) and "1:a" not in repr(s)
+
+
+@pytest.mark.parametrize(
+    "key,value,text",
+    [
+        ("LEREGISTER_LLM_PROVIDER", "grok", "LEREGISTER_LLM_PROVIDER"),
+        ("LEREGISTER_LLM_TIMEOUT", "fast", "LEREGISTER_LLM_TIMEOUT"),
+        ("LEREGISTER_LLM_TIMEOUT", "0", "LEREGISTER_LLM_TIMEOUT"),
+        ("LEREGISTER_LLM_TIMEOUT", "120", "LEREGISTER_LLM_TIMEOUT"),
+    ],
+)
+def test_bad_llm_settings_stop_startup_naming_the_setting(tmp_path, key, value, text):
+    from leregister.config import ConfigError, Settings
+
+    with pytest.raises(ConfigError, match=text):
+        Settings.load({**_llm_base(tmp_path), key: value})

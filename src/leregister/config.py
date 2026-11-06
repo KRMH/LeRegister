@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_ENV_FILE = Path.home() / ".leregister" / ".env"
 ENV_FILE_VAR = "LEREGISTER_ENV_FILE"
 DEFAULT_DB_PATH = Path.home() / ".leregister" / "leregister.db"
+DEFAULT_LLM_MODEL = "llama-3.3-70b-versatile"
+SUPPORTED_LLM_PROVIDERS = ("groq",)
 
 
 class ConfigError(Exception):
@@ -18,11 +20,15 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class Settings:
-    bot_token: str
+    bot_token: str = field(repr=False)
     owner_id: int
     chalet_count: int = 40
     max_stay: int = 60
     db_path: Path = DEFAULT_DB_PATH
+    llm_api_key: str | None = field(default=None, repr=False)  # unset: free text stays off
+    llm_provider: str = "groq"
+    llm_model: str = DEFAULT_LLM_MODEL
+    llm_timeout: float = 8.0
 
     @classmethod
     def load(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -35,6 +41,10 @@ class Settings:
             chalet_count=_integer(merged, "LEREGISTER_CHALET_COUNT", default=40),
             max_stay=_integer(merged, "LEREGISTER_MAX_STAY", default=60),
             db_path=_db_path(merged),
+            llm_api_key=merged.get("LEREGISTER_LLM_API_KEY", "").strip() or None,
+            llm_provider=_provider(merged),
+            llm_model=merged.get("LEREGISTER_LLM_MODEL", "").strip() or DEFAULT_LLM_MODEL,
+            llm_timeout=_seconds(merged, "LEREGISTER_LLM_TIMEOUT", default=8.0),
         )
 
 
@@ -96,3 +106,23 @@ def _integer(
 def _db_path(env: Mapping[str, str]) -> Path:
     value = env.get("LEREGISTER_DB_PATH", "").strip()
     return Path(value).expanduser() if value else DEFAULT_DB_PATH
+
+
+def _provider(env: Mapping[str, str]) -> str:
+    value = env.get("LEREGISTER_LLM_PROVIDER", "").strip().lower() or "groq"
+    if value not in SUPPORTED_LLM_PROVIDERS:
+        raise ConfigError(f"Setting LEREGISTER_LLM_PROVIDER must be one of: {', '.join(SUPPORTED_LLM_PROVIDERS)}")
+    return value
+
+
+def _seconds(env: Mapping[str, str], key: str, *, default: float) -> float:
+    raw = env.get(key, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ConfigError(f"Setting {key} must be a number of seconds") from None
+    if not 0 < value <= 60:
+        raise ConfigError(f"Setting {key} must be between 0 and 60 seconds")
+    return value

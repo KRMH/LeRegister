@@ -8,9 +8,13 @@ import sys
 from telegram.error import InvalidToken
 
 from leregister.adapters.clock import SystemClock
+from leregister.adapters.llm import GroqInterpreter
 from leregister.adapters.store import SqliteStore, StoreError
 from leregister.adapters.telegram.bot import build_application
 from leregister.config import ConfigError, Settings
+
+
+log = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -29,8 +33,17 @@ def main() -> None:
     except StoreError as exc:
         print(f"LeRegister cannot start: {exc}", file=sys.stderr)
         raise SystemExit(2) from None
+    interpreter = (
+        GroqInterpreter(settings.llm_api_key, settings.llm_model, settings.llm_timeout)
+        if settings.llm_api_key
+        else None
+    )
+    if interpreter is not None:
+        log.info("free text is on (provider %s, model %s)", settings.llm_provider, settings.llm_model)
+    else:
+        log.info("free text is off: no LEREGISTER_LLM_API_KEY set")
     try:
-        build_application(settings, SystemClock(), store, store).run_polling()
+        build_application(settings, SystemClock(), store, store, interpreter).run_polling()
     except InvalidToken:
         print("LeRegister cannot start: the bot token was rejected by Telegram", file=sys.stderr)
         raise SystemExit(2) from None

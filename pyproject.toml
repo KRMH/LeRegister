@@ -61,4 +61,5 @@ modules = [
     "leregister.adapters.telegram",
     "leregister.adapters.store",
     "leregister.adapters.clock",
+    "leregister.adapters.llm",
 ]

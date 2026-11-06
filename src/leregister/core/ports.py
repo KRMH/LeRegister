@@ -16,6 +16,18 @@ class Clock(Protocol):
         ...
 
 
+class InterpreterUnavailable(Exception):
+    """The Interpreter could not give an answer: timeout, network error, HTTP error or unreadable reply."""
+
+
+class Interpreter(Protocol):
+    """Turns free text into raw model output. The caller validates it; the model can only propose."""
+
+    async def complete(self, system: str, user: str) -> str:
+        """Return the model's raw text answer, or raise InterpreterUnavailable."""
+        ...
+
+
 class Store(Protocol):
     """Records one Command atomically."""
 
