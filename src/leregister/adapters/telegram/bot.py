@@ -1,4 +1,4 @@
-"""Telegram adapter: long polling, Owner gate, temporary acknowledgement."""
+"""Telegram adapter: long polling, Owner gate, `New` command replies."""
 
 from __future__ import annotations
 
@@ -9,15 +9,19 @@ from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageH
 
 from leregister.config import Settings
 from leregister.core.access import is_owner
+from leregister.core.parser import ParsedNew, parse_command
+from leregister.core.ports import Clock
+from leregister.core.replies import reject_reply, understood_reply
 
 log = logging.getLogger(__name__)
 
-ACK_TEXT = "LeRegister is running"
 
-
-def build_application(settings: Settings) -> Application:
+def build_application(settings: Settings, clock: Clock) -> Application:
     app = ApplicationBuilder().token(settings.bot_token).build()
     app.bot_data["owner_id"] = settings.owner_id
+    app.bot_data["clock"] = clock
+    app.bot_data["chalet_count"] = settings.chalet_count
+    app.bot_data["max_stay"] = settings.max_stay
     app.add_handler(MessageHandler(filters.ALL, handle_update))
     app.add_error_handler(handle_error)
     return app
@@ -43,4 +47,12 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     if message is None:
         return
-    await message.reply_text(ACK_TEXT)
+    result = parse_command(
+        message.text or "",
+        clock=context.bot_data["clock"],
+        chalet_count=context.bot_data["chalet_count"],
+        max_stay=context.bot_data["max_stay"],
+    )
+    # Story 1.2: a valid New is only echoed back, never saved (Story 1.4 records it).
+    reply = understood_reply(result) if isinstance(result, ParsedNew) else reject_reply(result)
+    await message.reply_text(reply)

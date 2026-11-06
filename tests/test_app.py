@@ -14,7 +14,7 @@ def clear(monkeypatch, tmp_path):
 
 def test_missing_setting_exits_2_naming_it(monkeypatch, tmp_path, capsys):
     clear(monkeypatch, tmp_path)
-    monkeypatch.setattr(app_module, "build_application", lambda s: pytest.fail("must not connect"))
+    monkeypatch.setattr(app_module, "build_application", lambda s, c: pytest.fail("must not connect"))
     with pytest.raises(SystemExit) as e:
         app_module.main()
     assert e.value.code == 2
@@ -30,7 +30,7 @@ def test_rejected_token_exits_2_without_echoing_token(monkeypatch, tmp_path, cap
         def run_polling(self):
             raise InvalidToken("123:secret")
 
-    monkeypatch.setattr(app_module, "build_application", lambda s: Boom())
+    monkeypatch.setattr(app_module, "build_application", lambda s, c: Boom())
     with pytest.raises(SystemExit) as e:
         app_module.main()
     assert e.value.code == 2
@@ -46,7 +46,7 @@ def test_httpx_logs_silenced_at_startup(monkeypatch, tmp_path):
         def run_polling(self):
             pass
 
-    monkeypatch.setattr(app_module, "build_application", lambda s: Ok())
+    monkeypatch.setattr(app_module, "build_application", lambda s, c: Ok())
     app_module.main()
     assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
     assert logging.getLogger("httpcore").getEffectiveLevel() >= logging.WARNING

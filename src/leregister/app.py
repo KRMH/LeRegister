@@ -7,6 +7,7 @@ import sys
 
 from telegram.error import InvalidToken
 
+from leregister.adapters.clock import SystemClock
 from leregister.adapters.telegram.bot import build_application
 from leregister.config import ConfigError, Settings
 
@@ -22,7 +23,7 @@ def main() -> None:
         print(f"LeRegister cannot start: {exc}", file=sys.stderr)
         raise SystemExit(2) from None
     try:
-        build_application(settings).run_polling()
+        build_application(settings, SystemClock()).run_polling()
     except InvalidToken:
         print("LeRegister cannot start: the bot token was rejected by Telegram", file=sys.stderr)
         raise SystemExit(2) from None
