@@ -116,3 +116,7 @@ Why the model sees name, chalet and dates but not the phone: the model needs the
 
 **Manual checks (if no CLI):**
 - Send `chalet 4 for Lea next friday for 3 nights +96171555123`: the Bot asks for the dates. Reply `from the 20th to the 23rd of december`: the Bot shows `New 4 Lea +96171555123 20-23 dec`.
+
+## Post-review fixes found by using it
+
+Found when the Owner tried the Bot for real (Telegram traces and the live model): (1) a one-word answer such as `Lea` or `4` was read by the model with no context and came back as "none", so the same question was asked again and the three questions ran out; the model message now says which question was just asked. (2) An invalid phone number was kept in the draft and only rejected by the parser at the end, which deleted the whole draft; a number the phone library rejects is now never kept and the Bot asks for the phone again at once ("That phone number does not look valid..."). (3) The instructions now tell the model to return the details it can read when a message gives any booking detail. Also noted: Groq's free tier answers 429 when many messages arrive in a short time, and the Bot then says free text is unavailable; Story 1.8 handles that case properly.

@@ -58,7 +58,7 @@ def render(
             f"and the phone with +, or use the strict format: {EXAMPLE}"
         )
     if kind == "free_text_question":
-        return question_text(args["ask"], args.get("name"), args.get("chalet"))
+        return question_text(args["ask"], args.get("name"), args.get("chalet"), invalid=args.get("invalid", False))
     if kind == "draft_dropped":
         return DRAFT_DROPPED
     if kind == "free_text_unavailable":
@@ -68,7 +68,7 @@ def render(
     raise ValueError(f"unknown reply kind: {kind}")
 
 
-def question_text(ask: str, name: str | None, chalet: int | None) -> str:
+def question_text(ask: str, name: str | None, chalet: int | None, *, invalid: bool = False) -> str:
     """One question naming what is still missing and what is already known."""
     who = f" for {name}" if name else ""
     where = f" in chalet {chalet}" if chalet else ""
@@ -83,7 +83,8 @@ def question_text(ask: str, name: str | None, chalet: int | None) -> str:
     if ask == "check_out":
         return f'Until which day{who}{where}? Give the day and month, like "the 23rd of december".'
     if ask == "phone":
-        return f"What is the guest's phone number{who}? Start with + and the country code, like +96171123456."
+        sorry = "That phone number does not look valid. " if invalid else ""
+        return f"{sorry}What is the guest's phone number{who}? Start with + and the country code, like +96171123456."
     raise ValueError(f"unknown question: {ask}")
 
 

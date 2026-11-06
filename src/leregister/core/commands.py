@@ -95,6 +95,9 @@ async def decide_free_text(
     if has_stray_number(redaction):
         return _rejection(update_id, clock, STRAY_NUMBER)
     phone = redaction.phones[0] if redaction.phones else None
+    phone_invalid = bool(redaction.phones) and not redaction.valid[0]
+    if phone_invalid:  # a number the phone library rejects is never kept: ask again at once
+        phone = None
 
     partial = Partial()
     content = has_content(redaction)
@@ -114,6 +117,8 @@ async def decide_free_text(
 
     merged = merge(base, partial, phone)
     missing = missing_part(merged)
+    if phone_invalid:
+        missing = "phone"
     if missing is None:
         command = render_strict_command(merged)
         result = parse_command(command, clock=clock, chalet_count=chalet_count, max_stay=max_stay)
@@ -127,7 +132,10 @@ async def decide_free_text(
     asked = replace(merged, questions_asked=base.questions_asked + 1)
     return Decision(
         journal=None,
-        reply=ReplyRequest("free_text_question", {"ask": missing, "name": asked.name, "chalet": asked.chalet}),
+        reply=ReplyRequest(
+            "free_text_question",
+            {"ask": missing, "name": asked.name, "chalet": asked.chalet, "invalid": phone_invalid},
+        ),
         draft=asked,
     )
 

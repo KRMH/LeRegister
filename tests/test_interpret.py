@@ -254,9 +254,12 @@ def test_the_model_message_carries_known_fields_but_never_the_phone():
     draft = Draft(4, "Lea", PHONE, questions_asked=1)
     text = build_user_message("from the 20th", draft)
     assert text.startswith("Already known: ") and "Lea" in text and '"chalet": 4' in text
+    assert "Question just asked: the dates, as day and month" in text
     assert text.endswith("\nfrom the 20th") and "9617" not in text
     assert build_user_message("from the 20th", None) == "from the 20th"
-    assert build_user_message("from the 20th", Draft(phone=PHONE)) == "from the 20th"
+    assert build_user_message("from the 20th", Draft(phone=PHONE)) == (
+        "Question just asked: which chalet it is\nfrom the 20th"
+    )
 
 
 def test_dates_render_in_the_forms_the_parser_knows():
@@ -294,7 +297,7 @@ def test_missing_dates_start_a_draft_and_ask_for_them():
     fake = FakeInterpreter(partial(chalet=4, name="Lea"))
     d = decide_free("chalet 4 for Lea next friday for 3 nights " + PHONE, fake)
     assert d.reply.kind == "free_text_question"
-    assert d.reply.args == {"ask": "dates", "name": "Lea", "chalet": 4}
+    assert d.reply.args == {"ask": "dates", "name": "Lea", "chalet": 4, "invalid": False}
     assert d.draft == Draft(chalet=4, name="Lea", phone=PHONE, questions_asked=1)
     assert d.journal is None and d.clear_draft is False
 
@@ -422,7 +425,7 @@ def test_a_fixed_phone_overrides_the_drafts_phone():
 def test_a_different_guest_replaces_the_draft_and_keeps_none_of_it():
     fake = FakeInterpreter(partial(chalet=6, name="Zoë"))
     d = decide_free("chalet 6 for Zoë +33612345678", fake, draft=LEA)
-    assert d.reply.args == {"ask": "dates", "name": "Zoë", "chalet": 6}
+    assert d.reply.args == {"ask": "dates", "name": "Zoë", "chalet": 6, "invalid": False}
     assert d.draft == Draft(chalet=6, name="Zoë", phone="+33612345678", questions_asked=1)
 
 
@@ -791,3 +794,73 @@ def test_the_purge_job_removes_drafts_nobody_finished(tmp_path):
     env.clock.advance(11 * 60)
     asyncio.run(purge_old_drafts(ctx))
     assert env.rows("SELECT COUNT(*) FROM drafts") == [(0,)]  # gone without any new message
+
+
+# ---- terse answers and invalid phones --------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "draft,hint",
+    [
+        (Draft(phone=PHONE, questions_asked=1), "which chalet it is"),
+        (Draft(chalet=4, phone=PHONE, questions_asked=1), "the guest's name"),
+        (Draft(4, "Lea", PHONE, questions_asked=1), "the dates, as day and month"),
+        (Draft(4, "Lea", PHONE, 20, 12, questions_asked=1), "the check-out day and month"),
+        (Draft(4, "Lea", PHONE, check_out_day=23, check_out_month=12, questions_asked=1), "the check-in day and month"),
+    ],
+)
+def test_the_model_is_told_which_question_was_just_asked(draft, hint):
+    text = build_user_message("Lea", draft)
+    assert f"Question just asked: {hint}" in text and text.endswith("\nLea")
+
+
+def test_no_question_line_when_nothing_was_asked_or_only_the_phone_is_missing():
+    assert build_user_message("hello", None) == "hello"
+    complete_but_phone = Draft(4, "Lea", None, 20, 12, 23, 12)
+    assert "Question just asked" not in build_user_message("hello", complete_but_phone)
+
+
+def test_a_one_word_answer_is_passed_with_its_question_so_the_model_can_place_it():
+    draft = Draft(chalet=4, phone=PHONE, questions_asked=1)
+    fake = FakeInterpreter(partial(name="Lea"))
+    d = decide_free("Lea", fake, draft=draft)
+    ((_, user),) = fake.calls
+    assert "Question just asked: the guest's name" in user and user.endswith("\nLea")
+    assert d.reply.args["ask"] == "dates" and d.draft.name == "Lea" and d.draft.chalet == 4
+
+
+def test_the_prompt_explains_how_to_read_a_short_answer():
+    assert "Question just asked" in SYSTEM_PROMPT and "single word" in SYSTEM_PROMPT
+
+
+INVALID = "+9617155512316"  # one digit too many
+
+
+def test_an_invalid_phone_is_not_kept_and_is_asked_for_again_at_once():
+    redaction = redact_phones("chalet 4 for Lea " + INVALID)
+    assert redaction.phones == (INVALID,) and redaction.valid == (False,)
+    d = decide_free("chalet 4 for Lea 20 to 23 december " + INVALID, FakeInterpreter(partial(chalet=4, name="Lea", **DATES)))
+    assert d.reply.args == {"ask": "phone", "name": "Lea", "chalet": 4, "invalid": True}
+    assert d.draft == Draft(4, "Lea", None, 20, 12, 23, 12, 1) and d.clear_draft is False
+
+
+def test_an_invalid_phone_never_ends_the_draft_through_the_parser():
+    draft = Draft(4, "Lea", None, 20, 12, 23, 12, 1)
+    d = decide_free(INVALID, FakeInterpreter(FULL), draft=draft)
+    assert d.reply.kind == "free_text_question" and d.draft.questions_asked == 2 and d.journal is None
+
+
+def test_a_valid_phone_is_flagged_valid():
+    assert redact_phones("Lea " + PHONE).valid == (True,)
+    assert redact_phones("Lea " + PHONE + " or +33612345678").valid == (True, True)
+
+
+def test_the_invalid_phone_question_apologises_once():
+    from leregister.core.replies import render
+
+    args = {"ask": "phone", "name": "Lea", "chalet": 4, "invalid": True}
+    assert render("free_text_question", args, None) == (
+        "That phone number does not look valid. What is the guest's phone number for Lea? "
+        "Start with + and the country code, like +96171123456."
+    )
+    assert render("free_text_question", {**args, "invalid": False}, None).startswith("What is the guest's phone")
