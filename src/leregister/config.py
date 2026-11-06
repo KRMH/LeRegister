@@ -10,7 +10,7 @@ from pathlib import Path
 DEFAULT_ENV_FILE = Path.home() / ".leregister" / ".env"
 ENV_FILE_VAR = "LEREGISTER_ENV_FILE"
 DEFAULT_DB_PATH = Path.home() / ".leregister" / "leregister.db"
-DEFAULT_LLM_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_LLM_MODEL = "openai/gpt-oss-20b"
 SUPPORTED_LLM_PROVIDERS = ("groq",)
 
 

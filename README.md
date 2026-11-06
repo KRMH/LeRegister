@@ -24,7 +24,7 @@ Set as environment variables, or in a `.env` file. The default `.env` location i
 | `LEREGISTER_DB_PATH` | no | `~/.leregister/leregister.db` | SQLite database file. Keep it outside the repository |
 | `LEREGISTER_LLM_API_KEY` | no | | Groq API key. Without it, free text is off and the Bot behaves as before |
 | `LEREGISTER_LLM_PROVIDER` | no | `groq` | Only `groq` is supported for now |
-| `LEREGISTER_LLM_MODEL` | no | `llama-3.3-70b-versatile` | Groq model id. Pick one your plan can use |
+| `LEREGISTER_LLM_MODEL` | no | `openai/gpt-oss-20b` | Groq model id. Pick one your account can use (list them at console.groq.com/docs/models) |
 | `LEREGISTER_LLM_TIMEOUT` | no | 8 | Seconds to wait for the model |
 
 ## Free text (optional)

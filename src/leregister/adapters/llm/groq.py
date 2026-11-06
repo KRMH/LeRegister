@@ -15,7 +15,7 @@ from leregister.core.ports import InterpreterUnavailable
 log = logging.getLogger(__name__)
 
 URL = "https://api.groq.com/openai/v1/chat/completions"
-MAX_ANSWER_TOKENS = 300
+MAX_ANSWER_TOKENS = 1500  # reasoning models spend part of this thinking before they write the JSON
 
 
 class GroqInterpreter:
@@ -42,6 +42,8 @@ class GroqInterpreter:
             "max_tokens": MAX_ANSWER_TOKENS,
             "response_format": {"type": "json_object"},
         }
+        if self._model.startswith("openai/gpt-oss"):
+            body["reasoning_effort"] = "low"  # a short thought is enough to read a booking sentence
         try:
             # httpx applies its timeout to each phase separately, so the whole call is bounded too
             response = await asyncio.wait_for(

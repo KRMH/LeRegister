@@ -92,7 +92,7 @@ def test_free_text_is_off_without_a_key_and_has_sane_defaults(tmp_path):
 
     s = Settings.load(_llm_base(tmp_path))
     assert s.llm_api_key is None and s.llm_provider == "groq"
-    assert s.llm_model == "llama-3.3-70b-versatile" and s.llm_timeout == 8.0
+    assert s.llm_model == "openai/gpt-oss-20b" and s.llm_timeout == 8.0
 
 
 def test_llm_settings_are_read_and_the_key_stays_out_of_repr(tmp_path):

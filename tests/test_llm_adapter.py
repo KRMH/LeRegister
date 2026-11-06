@@ -43,7 +43,7 @@ def test_a_good_call_returns_the_model_text_and_sends_the_expected_request():
     assert body["model"] == "llama-3.3-70b-versatile"
     assert body["messages"] == [{"role": "system", "content": "SYSTEM"}, {"role": "user", "content": "USER"}]
     assert body["response_format"] == {"type": "json_object"} and body["temperature"] == 0
-    assert body["max_tokens"] <= 500
+    assert body["max_tokens"] <= 2000
     assert set(body) == {"model", "messages", "temperature", "max_tokens", "response_format"}  # no tools
 
 
@@ -125,3 +125,15 @@ def test_one_client_is_shared_between_concurrent_calls():
 
     run(both())
     assert interpreter._client is client
+
+
+def test_a_reasoning_model_gets_a_low_reasoning_effort_and_other_models_do_not():
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return ok("{}")
+
+    run(make(handler, model="openai/gpt-oss-20b").complete("s", "u"))
+    run(make(handler, model="llama-3.3-70b-versatile").complete("s", "u"))
+    assert bodies[0]["reasoning_effort"] == "low" and "reasoning_effort" not in bodies[1]
