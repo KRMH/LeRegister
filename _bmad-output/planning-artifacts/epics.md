@@ -423,7 +423,7 @@ So that I can answer in my next message instead of writing the whole booking aga
 
 **Given** a draft is waiting
 **When** the Owner's next message arrives and does not start with `New`
-**Then** it is read as the answer to the question: it fills only the missing part, the rest of the draft is kept, and the result goes through the same validation and strict parser as any proposal (Story 1.6) and is handled exactly like one: today the Bot shows the strict command to send, and once Story 1.7 exists it asks for confirmation.
+**Then** it is read as the answer to the question: anything it states overrides the draft's value (a correction such as "actually chalet 5") and everything it does not mention is kept, unless it names a different guest or is a complete booking by itself, in which case it replaces the draft; the result goes through the same validation and strict parser as any proposal (Story 1.6) and is handled exactly like one: today the Bot shows the strict command to send, and once Story 1.7 exists it asks for confirmation.
 
 **Given** the phone number of a draft
 **When** the draft is stored and the model is called
@@ -433,9 +433,13 @@ So that I can answer in my next message instead of writing the whole booking aga
 **When** the Owner sends a strict `New` command
 **Then** the draft is discarded and the command runs as usual.
 
+**Given** a draft is waiting
+**When** the Owner sends exactly `stop`, `forget it` or `never mind`
+**Then** the draft is deleted and the Bot answers "Okay, I dropped that draft."
+
 **Given** a draft is older than 10 minutes (configurable)
 **When** the Owner writes again
-**Then** the draft is ignored and the message is treated as a new one.
+**Then** the draft is ignored and deleted, and the message is treated as a new one.
 
 **Given** the Bot has asked three questions for the same draft
 **When** the booking is still incomplete
