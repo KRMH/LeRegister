@@ -11,6 +11,7 @@ from leregister.core.parser import Rejected
 EXAMPLE = "New 2 Sam +96171123456 12-15 dec"
 TELEGRAM_LIMIT = 4096
 EDIT_NOTICE = "Edits are not applied, please send a Change command instead"
+COMMAND_FAILED = "That command was not recorded. Please resend it."
 
 
 def reject_reply(rejected: Rejected) -> str:
@@ -44,6 +45,8 @@ def render(
         return f"Already recorded: {describe_booking(_required(booking))}"
     if kind == "edit_notice":
         return EDIT_NOTICE
+    if kind == "command_failed":
+        return COMMAND_FAILED
     raise ValueError(f"unknown reply kind: {kind}")
 
 

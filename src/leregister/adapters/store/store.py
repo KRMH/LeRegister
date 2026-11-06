@@ -8,7 +8,7 @@ import sqlite3
 from datetime import datetime
 
 from leregister.adapters.store.db import Database, StoreError, iso_utc
-from leregister.core.events import BookingView, Decision, OutboxItem
+from leregister.core.events import BookingView, Decision, OutboxItem, ReplyRequest
 
 __all__ = ["SqliteStore", "StoreError"]
 
@@ -75,6 +75,16 @@ class SqliteStore(Database):
                 raise
 
         return await self.run(work)
+
+    async def queue_reply(self, chat_id: int, reply: ReplyRequest, at: datetime) -> None:
+        def work(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "INSERT INTO outbox (destination, chat_id, kind, args, next_attempt_at, created_at)"
+                " VALUES ('telegram', ?, ?, ?, ?, ?)",
+                (chat_id, reply.kind, json.dumps(reply.args, sort_keys=True), iso_utc(at), iso_utc(at)),
+            )
+
+        await self.run(work)
 
     async def fetch_due(self, destination: str, now: datetime, limit: int = 50) -> list[OutboxItem]:
         def work(conn: sqlite3.Connection) -> list[OutboxItem]:

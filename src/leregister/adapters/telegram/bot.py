@@ -11,7 +11,9 @@ from leregister.adapters.telegram.drainer import TelegramDrainer
 from leregister.config import Settings
 from leregister.core.access import is_owner
 from leregister.core.commands import decide, edited_message_decision
+from leregister.core.events import ReplyRequest
 from leregister.core.ports import Clock, OutboxQueue, Store
+from leregister.core.replies import render
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +27,11 @@ def build_application(settings: Settings, clock: Clock, store: Store, queue: Out
     app.bot_data["chalet_count"] = settings.chalet_count
     app.bot_data["max_stay"] = settings.max_stay
     app.bot_data["store"] = store
-    app.bot_data["drainer"] = TelegramDrainer(queue, clock, lambda chat_id, text: app.bot.send_message(chat_id, text))
+    async def send(chat_id: int, text: str) -> None:
+        await app.bot.send_message(chat_id, text)
+
+    app.bot_data["send"] = send
+    app.bot_data["drainer"] = TelegramDrainer(queue, clock, send)
     app.add_handler(MessageHandler(filters.ALL, handle_update))
     app.add_error_handler(handle_error)
     if app.job_queue is not None:
@@ -60,19 +66,68 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     clock: Clock = context.bot_data["clock"]
-    if update.edited_message is not None:
-        decision = edited_message_decision()
-    else:
-        decision = decide(
-            message.text or "",
-            update_id=update.update_id,
-            clock=clock,
-            chalet_count=context.bot_data["chalet_count"],
-            max_stay=context.bot_data["max_stay"],
-        )
     store: Store = context.bot_data["store"]
-    recorded = await store.record_command(update.update_id, chat.id, decision, clock.now())
+    try:
+        if update.edited_message is not None:
+            decision = edited_message_decision()
+        else:
+            decision = decide(
+                message.text or "",
+                update_id=update.update_id,
+                clock=clock,
+                chalet_count=context.bot_data["chalet_count"],
+                max_stay=context.bot_data["max_stay"],
+            )
+        recorded = await store.record_command(update.update_id, chat.id, decision, clock.now())
+    except Exception as exc:  # the transaction is rolled back: nothing from this Command remains
+        log.error(
+            "command failed update_id=%s chat_id=%s error=%s origin=%s",
+            update.update_id,
+            chat.id,
+            type(exc).__name__,
+            _origin(exc),
+        )
+        await _tell_owner_not_recorded(context, chat.id, update.update_id)
+        return
     if not recorded:
         log.info("duplicate update ignored update_id=%s", update.update_id)
         return
-    await context.bot_data["drainer"].drain()
+    try:
+        await context.bot_data["drainer"].drain()
+    except Exception as exc:  # the Command is recorded; the retry job delivers the reply
+        log.warning("reply delivery deferred update_id=%s error=%s", update.update_id, type(exc).__name__)
+
+
+def _origin(exc: BaseException) -> str:
+    """Where the exception was raised (file:line of the innermost frame): diagnosable, and free of message text."""
+    tb = exc.__traceback__
+    if tb is None:
+        return "unknown"
+    while tb.tb_next is not None:
+        tb = tb.tb_next
+    return f"{tb.tb_frame.f_code.co_filename.replace(chr(92), '/').rsplit('/', 1)[-1]}:{tb.tb_lineno}"
+
+
+async def _tell_owner_not_recorded(context: ContextTypes.DEFAULT_TYPE, chat_id: int, update_id: int) -> None:
+    """Never leave the Owner believing a failed Command was saved (FR-8, AR10).
+
+    First choice is the outbox, which retries. The store is the likeliest thing to be broken here, so
+    when queueing fails the notice is sent directly, best effort.
+    """
+    store: Store = context.bot_data["store"]
+    queued = False
+    try:
+        await store.queue_reply(chat_id, ReplyRequest("command_failed"), context.bot_data["clock"].now())
+        queued = True
+    except Exception as exc:
+        log.error("could not queue the failure notice update_id=%s error=%s", update_id, type(exc).__name__)
+    if queued:
+        try:
+            await context.bot_data["drainer"].drain()
+        except Exception as exc:  # the row is queued; the retry job delivers it
+            log.warning("failure notice delivery deferred update_id=%s error=%s", update_id, type(exc).__name__)
+        return
+    try:
+        await context.bot_data["send"](chat_id, render("command_failed", {}, None))
+    except Exception as exc:
+        log.error("could not send the failure notice update_id=%s error=%s", update_id, type(exc).__name__)
