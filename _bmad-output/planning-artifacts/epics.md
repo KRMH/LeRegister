@@ -93,7 +93,7 @@ FR-13: Epics 1, 2, 3 - Natural-language input with confirmation (New in Epic 1; 
 ## Epic List
 
 ### Epic 1: Log phone bookings by Telegram
-The Owner can send a `New ...` message and have it recorded; the Bot answers only the Owner. Includes project scaffold, database with no-delete protection, parser, Journal, Telegram reply path, and reporting of failed Commands. The Owner can also write the booking in plain words and confirm what the Bot understood with one tap.
+The Owner can send a `New ...` message and have it recorded; the Bot answers only the Owner. Includes project scaffold, database with no-delete protection, parser, Journal, Telegram reply path, and reporting of failed Commands. The Owner can also write the booking in plain words, answer the Bot's question about anything missing, and confirm what the Bot understood with one tap.
 **FRs covered:** FR-1, FR-2, FR-3, FR-13 (New)
 
 ### Epic 2: Catch overlaps, cancel and change
@@ -404,6 +404,50 @@ So that a free service never blocks me from logging a call.
 **Given** logs and the Journal
 **When** an interpreted message is handled
 **Then** guest names and phones do not appear in logs (AR16), and the proposal outcome is journaled with ids only (AR5).
+
+### Story 1.9: Ask for what is missing
+
+As the Owner,
+I want the Bot to ask me for the part of a booking I left out,
+So that I can answer in my next message instead of writing the whole booking again.
+
+**Acceptance Criteria:**
+
+**Given** a plain-words message from which the Bot understands some of chalet, name, phone and dates but not all
+**When** it is interpreted
+**Then** the Bot keeps what it understood as a short-lived draft and asks one question naming the first missing part (for example "Which dates for Lea in chalet 4?"), and records nothing.
+
+**Given** a message with relative dates such as "next friday"
+**When** it is interpreted
+**Then** the dates count as missing and the Bot asks for the day and month, and never guesses a date.
+
+**Given** a draft is waiting
+**When** the Owner's next message arrives and does not start with `New`
+**Then** it is read as the answer to the question: it fills only the missing part, the rest of the draft is kept, and the result goes through the same validation, strict parser and confirmation as any proposal (Stories 1.6 and 1.7).
+
+**Given** the phone number of a draft
+**When** the draft is stored and the model is called
+**Then** the phone is kept locally and never sent to the model; the model sees only the name, chalet and dates already understood, plus the new message with its phone replaced by a placeholder (NFR10).
+
+**Given** a draft is waiting
+**When** the Owner sends a strict `New` command
+**Then** the draft is discarded and the command runs as usual.
+
+**Given** a draft is older than 10 minutes (configurable)
+**When** the Owner writes again
+**Then** the draft is ignored and the message is treated as a new one.
+
+**Given** the Bot has asked three questions for the same draft
+**When** the booking is still incomplete
+**Then** the draft is discarded and the Bot shows the strict format.
+
+**Given** drafts are stored
+**When** they are written
+**Then** they live in a side table, never in `bookings` or `journal`, with at most one draft for the Owner; a new plain-words booking replaces it (AR3).
+
+**Given** the model is unavailable
+**When** a draft is waiting and the Owner answers
+**Then** the Bot replies as in Story 1.8 and keeps the draft until it expires.
 
 ## Epic 2: Catch overlaps, cancel and change
 
