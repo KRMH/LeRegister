@@ -4,7 +4,7 @@
 
 ## Goal
 
-The Owner (a single person) sends a `New <chalet> <name> <phone> <dates>` message to a Telegram bot and has the Phone Booking recorded, with the bot answering only the Owner. The epic lays the foundation everything else builds on: project scaffold, SQLite store with no-delete protection, deterministic parser, append-only journal, Telegram reply path via an outbox, and reporting of failed commands.
+The Owner (a single person) logs a phone booking in a Telegram message, either as a strict `New <chalet> <name> <phone> <dates>` command or, later in the epic, in plain words that an LLM turns into a proposed command the Owner confirms with one tap. The Bot answers only the Owner. The epic lays the foundation everything else builds on: project scaffold, SQLite store with no-delete protection, deterministic parser, append-only journal, Telegram reply path via an outbox, reporting of failed commands, and the free-text path (Interpreter, confirmation, fallback).
 
 ## Stories
 
@@ -13,6 +13,9 @@ The Owner (a single person) sends a `New <chalet> <name> <phone> <dates>` messag
 - Story 1.3: Journal, protect and de-duplicate every Command
 - Story 1.4: Record a Phone Booking
 - Story 1.5: Unexpected errors reach the Owner
+- Story 1.6: Turn free text into a proposed `New` Command
+- Story 1.7: Confirm before anything is recorded
+- Story 1.8: Keep working when the model does not
 
 ## Requirements & Constraints
 
@@ -21,27 +24,29 @@ The Owner (a single person) sends a `New <chalet> <name> <phone> <dates>` messag
 - An identical `active` booking sent again creates no duplicate; reply "already recorded".
 - Only the Owner's Telegram account is accepted; everyone else is ignored silently, with no reply and no data change. Owner id is set in configuration, never via chat.
 - A command that fails unexpectedly is reported to the Owner, never silently dropped.
+- Free text: an LLM may only propose a command. The deterministic parser stays the only authority on validity. Nothing is recorded until the Owner confirms. If the LLM is unavailable, strict commands still work.
 - Cost must be zero or near zero; official Telegram Bot API and libraries only.
-- Message text is untrusted data, never instructions. The parser has no AI model inside it.
+- Message text is untrusted data, never instructions. The parser has no AI model inside it. The model gets only the Owner's message and the command schema, never stored data, and has no tools.
 - No user-facing path deletes data.
 
 ## Technical Decisions
 
-- Hexagonal layout: `src/leregister/{core,adapters/{telegram,store,trello,schedule,backup,llm},app.py}`. `core` is pure: no I/O, no adapter/Telegram/SQLite/Trello/HTTP imports, and time only via a `Clock` port. An `import-linter` contract in the test suite enforces this. Adapters never import each other.
-- Stack: Python 3.11.9, `uv`, python-telegram-bot[job-queue] 22.8, APScheduler 3.11.3, phonenumbers 9.0.42, tzdata (needed on Windows), httpx >=0.27,<0.29, import-linter 2.15 (dev).
-- One SQLite DB in WAL mode is the system of record. Numbered SQL migrations applied at startup, tracked in `schema_version`. Triggers abort DELETE on `bookings`/`journal`, any UPDATE on `journal`, and any UPDATE on `bookings` other than `status`/`superseded_by` moving `active→changed|cancelled`. Mutable data lives only in side tables (`clients`, `register_cards`, `outbox`, `processed_updates`, `proposals`). No `INSERT OR REPLACE`. Tests must fire each trigger.
-- Each Command is one transaction writing `processed_updates`, state change, journal rows and outbox rows. A single serialized writer handles all DB access. No network I/O inside a transaction. Duplicate Telegram updates are detected by exact `update_id`. Edited-message updates are ignored, with a reply telling the Owner to send a Change command.
-- Journal schema: `id`, `at` (UTC), `event_type`, `subject_type`, `subject_id`, `related_booking_id` (nullable), JSON `payload`. Closed `event_type` list. Owner rejections are journaled with the reason; non-Owner messages are not journaled.
-- Outbox is the only egress: `destination` (`telegram`/`register`), optional unique `dedupe_key`, one drainer per destination, id order, retry with backoff, done only after success. Rows hold ids; text is rendered at send time by the single `core` renderer, English, plain text, split at 4096 chars.
-- Owner check: numeric Telegram user id from config, and the chat must be private, checked before parsing. Long polling only, with no inbound port.
-- Parser: a pure function over a fixed grammar with a built-in FR/EN month table and no date-guessing library. Phone = first token starting with `+`; name = tokens between chalet and phone. Check-in year = next occurrence on/after today (via `Clock`); a two-month check-out = first occurrence of the end date after check-in. Ambiguity → rejection with a reason.
-- Dates are ISO, and nights run from check-in up to but excluding check-out. Timestamps are UTC ISO-8601. "Today" is computed in `Asia/Beirut`. Phones are normalized to E.164, which is the Client key, with no default region.
-- Conventions: snake_case; PRD glossary terms verbatim; integer PKs; statuses exactly `active|changed|cancelled`; typed results (`ok`/`rejected(reason)`) rather than exceptions for expected failures. Config and secrets (bot token, owner id, chalet count default 40, max stay default 60, paths) come from env or a `.env` outside the repo. Dev and test use their own DB path and a separate bot token. Logs carry ids only, never names or phones.
+- Hexagonal layout: `src/leregister/{core,adapters/{telegram,store,llm,trello,schedule,backup},app.py}`. `core` is pure: no I/O, no adapter/Telegram/SQLite/Trello/HTTP imports, and time only via a `Clock` port. An `import-linter` contract enforces this, and a second contract keeps adapters independent of each other (`app.py` wires them).
+- Stack: Python 3.11, `uv`, python-telegram-bot[job-queue] 22.8, APScheduler, phonenumbers, tzdata, httpx >=0.27,<0.29, import-linter (dev).
+- One SQLite DB in WAL mode is the system of record. Numbered SQL migrations applied at startup, tracked in `schema_version`. Triggers abort DELETE on `bookings`/`journal`, any UPDATE on `journal`, and any UPDATE on `bookings` other than `status`/`superseded_by` moving `active→changed|cancelled`. Mutable data lives only in side tables (`clients`, `register_cards`, `outbox`, `processed_updates`, `proposals`). No `INSERT OR REPLACE`.
+- Each Command is one transaction writing `processed_updates`, state change, journal rows and outbox rows, through a single serialized writer. No network I/O inside a transaction. Duplicate Telegram updates are detected by exact `update_id`.
+- Journal: `id`, `at` (UTC), `event_type` from a closed list, `subject_type`, `subject_id`, `related_booking_id`, JSON `payload`. Free text adds `proposal_confirmed` and `proposal_discarded`. Non-Owner messages are not journaled.
+- Outbox is the only egress; one drainer per destination, id order, retry with backoff, text rendered at send time by the single `core` renderer (plain text, split at 4096 chars).
+- Free text: a `core` `Interpreter` port (free text → schema-validated proposed command or none) with an `adapters/llm/` adapter, provider and model in config, API key in `.env`. A proposal is rendered as a strict command string and run through the existing parser. Proposals wait in the `proposals` side table until confirmed, discarded or expired (10 minutes). The call has a short timeout and never holds the writer or a transaction.
+- Dates are ISO, nights run from check-in up to but excluding check-out, timestamps are UTC, "today" is computed in `Asia/Beirut`, phones are normalized to E.164 (the Client key).
+- Conventions: snake_case; PRD glossary terms verbatim; statuses exactly `active|changed|cancelled`; typed results (`ok`/`rejected(reason)`) rather than exceptions for expected failures. Config and secrets come from env or a `.env` outside the repo. Logs carry ids only, never names or phones.
+
+## UX & Interaction Patterns
+
+- Plain-text replies, English. Free-text proposals are shown in plain words with Confirm and Cancel buttons; only the Owner's private chat can use them.
 
 ## Cross-Story Dependencies
 
-- 1.1 provides the scaffold, config and Owner gate that 1.2-1.5 sit on.
-- 1.2's parser feeds 1.4. In 1.2 a valid `New` is only echoed back, not saved.
-- 1.3 creates `journal`, `outbox`, `processed_updates`, `schema_version`. 1.4 adds `bookings` and `clients` plus their triggers.
-- 1.5 hardens the transaction and reply path built in 1.3-1.4.
-- Epics 2-7 reuse the parser, journal, outbox, store and renderer built here.
+- 1.1 provides the scaffold, config and Owner gate. 1.3 provides journal, outbox and de-duplication. 1.4 adds `bookings` and `clients`. 1.5 hardens the transaction and reply path.
+- 1.6 adds the `Interpreter` port and adapter; its proposals feed the same parser and `core` use case as typed commands. 1.7 adds the `proposals` table and the confirm flow that 1.6 hands over to. 1.8 degrades 1.6 and 1.7 gracefully when the model is down.
+- Stories 2.5, 2.6 and 3.3 extend the Interpreter schema and reuse the 1.7 confirmation flow. Epics 2-6 reuse the parser, journal, outbox, store and renderer built here.
