@@ -1,0 +1,80 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 11-06-2026 09:00
+last_updated: 11-06-2026 09:00
+project: LeRegister
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: backlog
+  1-1-bot-runs-and-answers-only-the-owner: backlog
+  1-2-understand-a-new-command-or-say-why-not: backlog
+  1-3-journal-protect-and-de-duplicate-every-command: backlog
+  1-4-record-a-phone-booking: backlog
+  1-5-unexpected-errors-reach-the-owner: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-overlap-alert-on-a-new-booking: backlog
+  2-2-cancel-a-phone-booking: backlog
+  2-3-change-a-booking-s-dates: backlog
+  2-4-see-when-an-overlap-is-resolved: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-rate-a-client: backlog
+  3-2-see-a-client-s-rating-when-they-book-again: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-daily-morning-summary-at-08-00: backlog
+  4-2-a-missed-or-failed-summary-is-caught-up: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-bookings-appear-as-cards-on-a-trello-board: backlog
+  5-2-cards-follow-the-booking-s-status-and-overlaps: backlog
+  5-3-rebuild-the-register-from-the-database: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-daily-backup-on-another-volume: backlog
+  6-2-restore-from-a-backup: backlog
+  6-3-know-when-the-bot-was-offline: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-turn-free-text-into-a-proposed-command: backlog
+  7-2-confirm-before-anything-is-recorded: backlog
+  7-3-cancel-change-and-rating-in-free-text: backlog
+  7-4-keep-working-when-the-llm-does-not: backlog
+  epic-7-retrospective: optional
