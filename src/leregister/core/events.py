@@ -39,14 +39,39 @@ class JournalEntry:
 class ReplyRequest:
     """What to tell the Owner. Rendered to text only at send time."""
 
-    kind: str  # rejected | new_preview | edit_notice
+    kind: str  # rejected | recorded | already_recorded | edit_notice
     args: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class NewBooking:
+    """A validated Phone Booking to record. Dates are ISO strings."""
+
+    chalet: int
+    name: str
+    phone: str  # E.164
+    check_in: str
+    check_out: str
+
+
+@dataclass(frozen=True)
+class BookingView:
+    """A stored booking, as needed to render a reply."""
+
+    id: int
+    chalet: int
+    name: str
+    phone: str
+    check_in: str
+    check_out: str
+    status: str
 
 
 @dataclass(frozen=True)
 class Decision:
     journal: JournalEntry | None
     reply: ReplyRequest
+    booking: NewBooking | None = None
 
 
 @dataclass(frozen=True)
@@ -57,3 +82,4 @@ class OutboxItem:
     args: dict[str, Any]
     journal_payload: dict[str, Any] | None
     attempts: int
+    booking: BookingView | None = None

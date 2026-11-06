@@ -28,16 +28,18 @@ def query(store, sql):
 def test_fresh_db_has_only_this_story_tables_and_wal(tmp_path):
     store = open_store(tmp_path)
     tables = {r[0] for r in query(store, "SELECT name FROM sqlite_master WHERE type='table'")}
-    assert tables - {"sqlite_sequence"} == {"journal", "outbox", "processed_updates", "schema_version"}
+    assert tables - {"sqlite_sequence"} == {
+        "journal", "outbox", "processed_updates", "schema_version", "clients", "bookings"
+    }
     assert query(store, "PRAGMA journal_mode") == [("wal",)]
-    assert query(store, "SELECT version FROM schema_version") == [(1,)]
+    assert query(store, "SELECT version FROM schema_version") == [(1,), (2,)]
     store.close()
 
 
 def test_migrations_apply_once_on_reopen(tmp_path):
     open_store(tmp_path).close()
     store = open_store(tmp_path)
-    assert query(store, "SELECT version FROM schema_version") == [(1,)]
+    assert query(store, "SELECT version FROM schema_version") == [(1,), (2,)]
     store.close()
 
 

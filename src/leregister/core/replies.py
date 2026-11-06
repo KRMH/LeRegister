@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from leregister.core.parser import ParsedNew, Rejected
+from leregister.core.events import BookingView
+from leregister.core.parser import Rejected
 
 EXAMPLE = "New 2 Sam +96171123456 12-15 dec"
 TELEGRAM_LIMIT = 4096
@@ -19,32 +20,37 @@ def reject_reply(rejected: Rejected) -> str:
     )
 
 
-def understood_reply(parsed: ParsedNew) -> str:
-    nights = parsed.nights
+def describe_booking(booking: BookingView) -> str:
+    nights = (date.fromisoformat(booking.check_out) - date.fromisoformat(booking.check_in)).days
     unit = "night" if nights == 1 else "nights"
     return (
-        f"Understood (not saved yet): Chalet {parsed.chalet}, {parsed.name}, {parsed.phone}, "
-        f"{parsed.check_in.isoformat()} to {parsed.check_out.isoformat()} ({nights} {unit})"
+        f"Chalet {booking.chalet}, {booking.name}, {booking.phone}, "
+        f"{booking.check_in} to {booking.check_out} ({nights} {unit})"
     )
 
 
-def render(kind: str, args: dict[str, Any], journal_payload: dict[str, Any] | None) -> str:
+def render(
+    kind: str,
+    args: dict[str, Any],
+    journal_payload: dict[str, Any] | None,
+    booking: BookingView | None = None,
+) -> str:
     """Turn an outbox row (ids and small arguments) into the text to send."""
     if kind == "rejected":
         return reject_reply(Rejected((journal_payload or {}).get("reason", "unknown")))
-    if kind == "new_preview":
-        return understood_reply(
-            ParsedNew(
-                chalet=args["chalet"],
-                name=args["name"],
-                phone=args["phone"],
-                check_in=date.fromisoformat(args["check_in"]),
-                check_out=date.fromisoformat(args["check_out"]),
-            )
-        )
+    if kind == "recorded":
+        return f"Recorded: {describe_booking(_required(booking))}"
+    if kind == "already_recorded":
+        return f"Already recorded: {describe_booking(_required(booking))}"
     if kind == "edit_notice":
         return EDIT_NOTICE
     raise ValueError(f"unknown reply kind: {kind}")
+
+
+def _required(booking: BookingView | None) -> BookingView:
+    if booking is None:
+        raise ValueError("this reply needs its booking")
+    return booking
 
 
 def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:

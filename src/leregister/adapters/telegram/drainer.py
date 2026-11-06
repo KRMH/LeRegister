@@ -28,7 +28,7 @@ class TelegramDrainer:
             now = self._clock.now()
             for item in await self._queue.fetch_due("telegram", now):
                 try:
-                    text = render(item.kind, item.args, item.journal_payload)
+                    text = render(item.kind, item.args, item.journal_payload, item.booking)
                     for chunk in split_message(text):
                         await self._send(item.chat_id, chunk)
                 except Exception as exc:  # a failed row waits; later rows are not blocked

@@ -16,10 +16,16 @@ def test_rejection_is_journaled_with_reason_only():
     assert d.reply.kind == "rejected" and d.reply.args == {}
 
 
-def test_valid_new_has_no_journal_and_carries_parsed_values():
+def test_valid_new_carries_a_booking_and_a_booking_recorded_template():
     d = run("New 2 Sam +96171123456 12-15 dec")
-    assert d.journal is None and d.reply.kind == "new_preview"
-    assert d.reply.args["check_in"] == "2026-12-12" and d.reply.args["name"] == "Sam"
+    assert d.reply.kind == "recorded"
+    assert (d.booking.chalet, d.booking.name, d.booking.phone) == (2, "Sam", "+96171123456")
+    assert (d.booking.check_in, d.booking.check_out) == ("2026-12-12", "2026-12-15")
+    assert d.journal.event_type is EventType.BOOKING_RECORDED
+    assert d.journal.payload == {
+        "chalet": 2, "phone": "+96171123456", "check_in": "2026-12-12", "check_out": "2026-12-15"
+    }
+    assert "Sam" not in str(d.journal.payload)
 
 
 def test_edited_message_decision_changes_nothing():

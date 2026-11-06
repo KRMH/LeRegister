@@ -9,7 +9,7 @@ from leregister.core.access import is_owner
 
 OWNER = 42
 VALID_NEW = "New 2 Sam +96171123456 12-15 dec"
-PREVIEW = "Understood (not saved yet): Chalet 2, Sam, +96171123456, 2026-12-12 to 2026-12-15 (3 nights)"
+PREVIEW = "Recorded: Chalet 2, Sam, +96171123456, 2026-12-12 to 2026-12-15 (3 nights)"
 
 
 class Env:
@@ -52,12 +52,26 @@ class Env:
         return [text for _, text in self.sender.sent]
 
 
-def test_owner_valid_new_is_echoed_not_journaled(tmp_path):
+def test_owner_valid_new_is_recorded_journaled_and_echoed(tmp_path):
     env = Env(tmp_path)
     env.send()
     assert env.texts() == [PREVIEW]
-    assert env.rows("SELECT COUNT(*) FROM journal") == [(0,)]
-    assert env.rows("SELECT status FROM outbox") == [("done",)]
+    assert env.rows("SELECT chalet, client_name, client_phone, check_in, check_out, status FROM bookings") == [
+        (2, "Sam", "+96171123456", "2026-12-12", "2026-12-15", "active")
+    ]
+    assert env.rows("SELECT event_type, subject_type, subject_id, related_booking_id FROM journal") == [
+        ("booking_recorded", "booking", "1", 1)
+    ]
+    assert env.rows("SELECT status, booking_id FROM outbox") == [("done", 1)]
+
+
+def test_sending_the_same_booking_again_says_already_recorded(tmp_path):
+    env = Env(tmp_path)
+    env.send(update_id=1)
+    env.send(update_id=2)
+    assert env.texts()[1].startswith("Already recorded: Chalet 2, Sam,")
+    assert env.rows("SELECT COUNT(*) FROM bookings") == [(1,)]
+    assert env.rows("SELECT COUNT(*) FROM journal") == [(1,)]
 
 
 def test_rejected_command_is_journaled_with_reason_and_answered(tmp_path):

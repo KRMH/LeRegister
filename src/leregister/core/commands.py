@@ -1,8 +1,8 @@
-"""Pure decision for one Owner message: what to journal and what to answer."""
+"""Pure decision for one Owner message: what to record, journal and answer."""
 
 from __future__ import annotations
 
-from leregister.core.events import Decision, EventType, JournalEntry, ReplyRequest
+from leregister.core.events import Decision, EventType, JournalEntry, NewBooking, ReplyRequest
 from leregister.core.parser import ParsedNew, parse_command
 from leregister.core.ports import Clock
 
@@ -10,20 +10,28 @@ from leregister.core.ports import Clock
 def decide(text: str, *, update_id: int, clock: Clock, chalet_count: int, max_stay: int) -> Decision:
     result = parse_command(text, clock=clock, chalet_count=chalet_count, max_stay=max_stay)
     if isinstance(result, ParsedNew):
-        # Story 1.3: a valid New is only echoed back. Story 1.4 records it and journals booking_recorded.
-        return Decision(
-            journal=None,
-            reply=ReplyRequest(
-                "new_preview",
-                {
-                    "chalet": result.chalet,
-                    "name": result.name,
-                    "phone": result.phone,
-                    "check_in": result.check_in.isoformat(),
-                    "check_out": result.check_out.isoformat(),
-                },
-            ),
+        booking = NewBooking(
+            chalet=result.chalet,
+            name=result.name,
+            phone=result.phone,
+            check_in=result.check_in.isoformat(),
+            check_out=result.check_out.isoformat(),
         )
+        # The store decides "recorded" vs "already recorded" inside its transaction and fills in the
+        # booking id: subject_id is a placeholder here.
+        entry = JournalEntry(
+            at=clock.now(),
+            event_type=EventType.BOOKING_RECORDED,
+            subject_type="booking",
+            subject_id="",
+            payload={
+                "chalet": booking.chalet,
+                "phone": booking.phone,
+                "check_in": booking.check_in,
+                "check_out": booking.check_out,
+            },
+        )
+        return Decision(journal=entry, reply=ReplyRequest("recorded"), booking=booking)
     entry = JournalEntry(
         at=clock.now(),
         event_type=EventType.COMMAND_REJECTED,
