@@ -1,3 +1,4 @@
+<!-- Status, 2026-11-07. Resolved since they were logged: the 4096-character reply limit (Story 1.3 splits replies), edited and non-text updates (Story 1.3 replies to edits), and a failing record_command with no reply (Story 1.5 tells the Owner). Still open: an outbox row that always fails is retried every 5 minutes forever. Entries below are kept as written. -->
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-understand-a-new-command-or-say-why-not.md`
   summary: A near-4096-character `New` message can make the echo or rejection reply exceed Telegram's 4096-char limit, so `reply_text` fails and the Owner gets no answer.
   evidence: Edge Case Hunter; reply embeds the user-typed name. The single renderer that splits at 4096 chars belongs to the outbox work in Story 1.3/1.5; a name length cap would be a new rule the Owner should decide.

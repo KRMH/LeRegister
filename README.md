@@ -28,6 +28,19 @@ Set as environment variables, or in a `.env` file. The default `.env` location i
 | `LEREGISTER_LLM_TIMEOUT` | no | 8 | Seconds to wait for the model |
 | `LEREGISTER_DRAFT_MINUTES` | no | 10 | How long the Bot waits for you to finish an incomplete plain-words booking |
 
+## Using the Bot
+
+Send these from the Owner account (the Bot ignores everyone else):
+
+| You send | The Bot answers |
+| --- | --- |
+| `New 2 Sam +96171123456 12-15 dec` | `Recorded: Chalet 2, Sam, +96171123456, 2026-12-12 to 2026-12-15 (3 nights)` |
+| the same booking again | `Already recorded: ...` (no duplicate) |
+| anything it cannot read | the reason and an example, and nothing is recorded |
+| an edited message | a reminder that edits are not applied |
+
+Dates need no year: the check-in is the next occurrence of that day. Months can be English or French. Phones need `+` and the country code. Every command is kept in an append-only journal, and bookings are never deleted. If saving a command fails unexpectedly, the Bot tells you it was not recorded.
+
 ## Free text (optional)
 
 Write a booking in plain words, for example `chalet 2 for Sam from the 12th to the 15th of december, +96171123456`. The Bot shows the strict command it understood and records nothing; you send that command to record it. If something is missing (the dates, the chalet, the phone), it asks one question and your next message fills the gap or corrects it. Say `stop`, `forget it` or `never mind` to drop the draft. A draft is dropped by itself after the time limit, when you send a `New` command, or once the Bot has asked three questions and the booking is still incomplete. The model sees the name, chalet and dates you gave earlier in the draft, never the phone.
@@ -39,6 +52,8 @@ Setup, once:
 3. Add `LEREGISTER_LLM_API_KEY=...` to your `.env` and restart the Bot.
 
 The model never sees the phone number: it is replaced by a placeholder before sending and put back locally. A message that also contains other long digit runs (a number without `+`, or a date with a year) is refused instead of sent. The model does see the rest of your message: the guest name, the dates and any other words you wrote. A message that starts with `New` is always treated as a strict command and never sent.
+
+Groq's free tier limits how many requests you can send in a short time. If you send many messages quickly the Bot answers that free text is unavailable; wait a minute and try again. Strict commands are not affected.
 
 Use a separate bot token for development and tests.
 

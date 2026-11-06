@@ -193,7 +193,9 @@ The Register lists every Phone Booking with Chalet, Client name and phone, dates
 When a message does not match a strict Command format, the Bot sends the message text to the Interpreter. A valid Proposal is shown to the Owner with Confirm and Cancel buttons, and recorded only on Confirm.
 
 **Consequences (testable):**
-- The model receives only the Owner's message and the Command schema, never stored bookings or Client data.
+- The model receives only the Owner's message with the phone number replaced by a placeholder, plus the Command schema and, on a follow-up, the name, chalet and dates already understood from the Owner's own earlier message. It never receives a phone number, stored bookings or Client data.
+- When a booking is incomplete, the Bot keeps a short-lived draft (10 minutes, at most 3 questions) and asks for the first missing part, in the order chalet, name, dates, phone. Relative dates such as "next friday" count as missing and are never guessed. The next message fills or corrects the draft; a different guest name or a complete booking replaces it.
+- `stop`, `forget it`, `never mind` or a strict `New` command drops a waiting draft.
 - A Proposal is rendered as a strict Command and re-checked by the deterministic parser. A Proposal the parser rejects is never recorded.
 - Nothing is recorded before Confirm. Confirm runs the same use case as a typed Command. A second Confirm records nothing.
 - A Proposal expires after 10 minutes (configurable). Only the Owner's account can Confirm or Cancel.
@@ -214,7 +216,7 @@ When a message does not match a strict Command format, the Bot sends the message
 - **Cost:** running cost is zero or near zero. The Bot uses Telegram's official Bot API with official libraries only. Unofficial WhatsApp libraries are excluded because they break WhatsApp's terms. WhatsApp itself is out of v1 because its free tier does not reliably cover a daily proactive summary (see `[NOTE FOR PM]` below). LLM use must also be free: a hosted free tier for the MVP, a local model later.
 - **Untrusted input (prompt-injection safety):** all message text is data, never instructions. The Bot accepts only the Owner's account (FR-3), parses Commands against a fixed grammar, and does not forward message text to any tool that can take action. The strict Command parser is rule-based and is the only authority on validity. An optional LLM Interpreter (§4.7) may propose a Command from free text. Its output is validated against a fixed schema and shown to the Owner for confirmation, and it has no ability to act.
 - **Reliability:** the Bot should be available during the Owner's working day. A down Bot must be noticed. If no Morning Summary arrives, that tells the Owner.
-- **Data protection:** will be handled in phase 3. Guest names and phone numbers are personal data, and the retention period is open (§9). The hosted LLM receives only the Owner's own message text, which may include a guest name or phone. The Owner accepts this for the MVP.
+- **Data protection:** will be handled in phase 3. Guest names and phone numbers are personal data, and the retention period is open (§9). The hosted LLM receives the Owner's own message text with any phone number removed, and on a follow-up the guest name, chalet and dates already given; the phone number is kept on the Owner's computer. The Owner accepts this for the MVP.
 - **Never-delete rule:** applies to every user-facing path (FR-6, FR-7, FR-8). Only an explicit, manual admin action outside the Bot can remove data.
 
 `[NOTE FOR PM]` The Telegram decision came from research (see memlog). If you later want WhatsApp, the official Cloud API works with a dedicated number and a daily "wake-up" message from you. It is a separate decision.
@@ -248,7 +250,7 @@ Predictions (phase 2). Blocking. Cross-channel conflicts. Free-Chalet suggestion
 3. **Rating use:** the Owner glances at it when a Client rebooks. Is the displayed Rating enough, or should there also be a warning level?
 4. **Data retention period** for guest data.
 5. **Phone format:** resolved. Every number must start with `+` and the country code. Numbers without it are rejected.
-6. **LLM provider:** which hosted free provider, and its data-use terms (does it train on inputs?).
+6. **LLM provider:** decided: Groq's hosted free tier. Its documentation says it does not retain inference data by default and offers Zero Data Retention, which the Owner switches on. Its documentation page does not state whether data is used for training, so that remains unconfirmed.
 
 ## 10. Assumptions Index
 *The Owner reviewed the draft and kept the other inferred points (Command formats, ±1 Rating, duplicate handling, Cancel matching, empty-day summary), so they are no longer tagged.*
