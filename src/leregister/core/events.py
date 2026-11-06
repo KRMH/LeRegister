@@ -68,10 +68,26 @@ class BookingView:
 
 
 @dataclass(frozen=True)
+class Draft:
+    """A plain-words booking still being completed. Every part may be unknown; the phone stays local."""
+
+    chalet: int | None = None
+    name: str | None = None
+    phone: str | None = None  # E.164, never sent to the model
+    check_in_day: int | None = None
+    check_in_month: int | None = None
+    check_out_day: int | None = None
+    check_out_month: int | None = None
+    questions_asked: int = 0
+
+
+@dataclass(frozen=True)
 class Decision:
     journal: JournalEntry | None
     reply: ReplyRequest
     booking: NewBooking | None = None
+    draft: Draft | None = None  # write this draft (replacing any other)
+    clear_draft: bool = False  # delete the waiting draft
 
 
 @dataclass(frozen=True)

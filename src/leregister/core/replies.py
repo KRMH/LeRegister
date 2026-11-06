@@ -12,6 +12,7 @@ EXAMPLE = "New 2 Sam +96171123456 12-15 dec"
 TELEGRAM_LIMIT = 4096
 EDIT_NOTICE = "Edits are not applied, please send a Change command instead"
 COMMAND_FAILED = "That command was not recorded. Please resend it."
+DRAFT_DROPPED = "Okay, I dropped that draft."
 FREE_TEXT_UNAVAILABLE = f"Free text is unavailable right now. Please use the strict format, like: {EXAMPLE}"
 
 
@@ -56,11 +57,34 @@ def render(
             'Please give the exact dates (for example "from the 20th to the 23rd of december") '
             f"and the phone with +, or use the strict format: {EXAMPLE}"
         )
+    if kind == "free_text_question":
+        return question_text(args["ask"], args.get("name"), args.get("chalet"))
+    if kind == "draft_dropped":
+        return DRAFT_DROPPED
     if kind == "free_text_unavailable":
         return FREE_TEXT_UNAVAILABLE
     if kind == "free_text_proposal":
         return f"I understood this, but nothing is saved yet. To record it, send exactly:\n{args['command']}"
     raise ValueError(f"unknown reply kind: {kind}")
+
+
+def question_text(ask: str, name: str | None, chalet: int | None) -> str:
+    """One question naming what is still missing and what is already known."""
+    who = f" for {name}" if name else ""
+    where = f" in chalet {chalet}" if chalet else ""
+    if ask == "chalet":
+        return f"Which chalet is it{who}?"
+    if ask == "name":
+        return f"What is the guest's name{where}?"
+    if ask == "dates":
+        return f'Which dates{who}{where}? Give the day and month, like "from the 20th to the 23rd of december".'
+    if ask == "check_in":
+        return f'From which day{who}{where}? Give the day and month, like "the 20th of december".'
+    if ask == "check_out":
+        return f'Until which day{who}{where}? Give the day and month, like "the 23rd of december".'
+    if ask == "phone":
+        return f"What is the guest's phone number{who}? Start with + and the country code, like +96171123456."
+    raise ValueError(f"unknown question: {ask}")
 
 
 def _required(booking: BookingView | None) -> BookingView:

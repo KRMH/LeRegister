@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol
 
-from leregister.core.events import Decision, OutboxItem, ReplyRequest
+from leregister.core.events import Decision, Draft, OutboxItem, ReplyRequest
 
 
 class Clock(Protocol):
@@ -34,6 +34,14 @@ class Store(Protocol):
     async def record_command(self, update_id: int, chat_id: int, decision: Decision, at: datetime) -> bool:
         """Write processed_updates, the journal row (if any) and the reply outbox row in one
         transaction. Returns False, writing nothing, when `update_id` was already processed."""
+        ...
+
+    async def get_draft(self, chat_id: int, now: datetime, ttl: timedelta) -> Draft | None:
+        """The waiting draft for this chat, or None. A draft not changed within `ttl` is deleted and not returned."""
+        ...
+
+    async def purge_drafts(self, older_than: datetime) -> None:
+        """Delete every draft last changed before `older_than`, so guest details do not linger."""
         ...
 
     async def queue_reply(self, chat_id: int, reply: ReplyRequest, at: datetime) -> None:

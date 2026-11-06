@@ -26,10 +26,11 @@ Set as environment variables, or in a `.env` file. The default `.env` location i
 | `LEREGISTER_LLM_PROVIDER` | no | `groq` | Only `groq` is supported for now |
 | `LEREGISTER_LLM_MODEL` | no | `openai/gpt-oss-20b` | Groq model id. Pick one your account can use (list them at console.groq.com/docs/models) |
 | `LEREGISTER_LLM_TIMEOUT` | no | 8 | Seconds to wait for the model |
+| `LEREGISTER_DRAFT_MINUTES` | no | 10 | How long the Bot waits for you to finish an incomplete plain-words booking |
 
 ## Free text (optional)
 
-Write a booking in plain words, for example `chalet 2 for Sam from the 12th to the 15th of december, +96171123456`. The Bot shows the strict command it understood and records nothing; you send that command to record it.
+Write a booking in plain words, for example `chalet 2 for Sam from the 12th to the 15th of december, +96171123456`. The Bot shows the strict command it understood and records nothing; you send that command to record it. If something is missing (the dates, the chalet, the phone), it asks one question and your next message fills the gap or corrects it. Say `stop`, `forget it` or `never mind` to drop the draft. A draft is dropped by itself after the time limit, when you send a `New` command, or once the Bot has asked three questions and the booking is still incomplete. The model sees the name, chalet and dates you gave earlier in the draft, never the phone.
 
 Setup, once:
 

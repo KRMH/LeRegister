@@ -151,7 +151,7 @@ def test_build_application_wires_owner_store_drainer_and_retry_job(tmp_path):
     handlers = [h for group in app.handlers.values() for h in group]
     assert any(isinstance(h, MessageHandler) and h.callback is handle_update for h in handlers)
     assert app.error_handlers
-    assert len(app.job_queue.jobs()) == 1
+    assert len(app.job_queue.jobs()) == 2
     store.close()
 
 

@@ -2,7 +2,8 @@
 title: '1.9 Ask for what is missing'
 type: 'feature'
 created: '2026-11-07'
-status: 'draft'
+status: 'done'
+baseline_commit: 'a29f8be73f9bff22f8b13f8f464bffb47a78d924'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -63,10 +64,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/leregister/core/{events,interpret,commands,replies,ports}.py` -- nullable schema, merge rules, questions, draft decisions -- FR-13, NFR10
-- [ ] `src/leregister/adapters/store/` -- migration 003, draft read and atomic write -- AR3, AR4
-- [ ] `src/leregister/adapters/telegram/bot.py`, `config.py`, `README.md` -- wiring and setting -- AR16
-- [ ] `tests/` -- every matrix row with a fake Interpreter, draft expiry with a movable clock, store tests for the table, the phone never in any model input, import contracts green -- AC
+- [x] `src/leregister/core/{events,interpret,commands,replies,ports}.py` -- nullable schema, merge rules, questions, draft decisions -- FR-13, NFR10
+- [x] `src/leregister/adapters/store/` -- migration 003, draft read and atomic write -- AR3, AR4
+- [x] `src/leregister/adapters/telegram/bot.py`, `config.py`, `README.md` -- wiring and setting -- AR16
+- [x] `tests/` -- every matrix row with a fake Interpreter, draft expiry with a movable clock, store tests for the table, the phone never in any model input, import contracts green -- AC
 
 **Acceptance Criteria:**
 - Given the first sentence with missing dates, when it is sent, then one question names the missing part and the answer completes the booking without retyping.
@@ -75,9 +76,31 @@ context:
 
 ## Implementation Notes
 
+Implemented directly (no subagent). `core/interpret.py` now parses a nullable `Partial`, builds the follow-up message (known name, chalet and dates, never the phone), merges (stated values override, a different guest name or a complete message restarts), and renders the strict command from a complete `Draft`. `decide_free_text` returns a question, a proposal or a refusal together with the draft change (`Decision.draft` or `clear_draft`); `decide` clears the draft for any message starting with `New`. The phone is no longer part of the model schema: it is found locally and stored in the draft. `drafts` (migration 003) is written inside `record_command`; `get_draft` deletes an expired row when it finds it. A message the model cannot read does not start a draft even if it contains a phone number; a message that is only a phone number does. Default question order: chalet, name, dates, phone. Checked against the real Groq model (`openai/gpt-oss-20b`) with eight scripted chats: fill-in, correction, new guest, stop word, nothing understood. 354 tests pass; all import contracts kept.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| Expired drafts keep a guest's name and phone in the database until the Owner writes again | medium | patch | A purge job runs every minute and deletes drafts older than the limit; tests added |
+| A fuller name ("Lea Khoury" after "Lea") counted as a new guest and wiped the draft | medium | patch | Guests are compared by first word, ignoring case and accents; tests added |
+| With half-known dates the Bot repeated the generic dates question | low | patch | New questions "Until which day…?" and "From which day…?"; tests added |
+| `assert` in `render_strict_command` disappears under `python -O` | low | patch | Raises `ValueError` for an incomplete draft; test added |
+| Stop words missed `nevermind`, `never-mind` and a trailing ellipsis | low | patch | Normalised; tests added |
+| `drafts` accepted impossible values; `Draft` was built from a positional row | low | patch | CHECK constraints in the migration; keyword construction; tests added |
+| Expiry boundary and fixed-width timestamps untested; `00961` and "New booking" cases dropped from tests | low | patch | Tests added back |
+| README did not mention the question limit, the strict command clearing the draft, or what the model sees | low | patch | README updated |
+| Fourth question needed when four parts are missing: draft deleted although every answer helped | medium | rejected | The Owner chose to keep "3 questions in total" as approved; tests pin the behaviour |
+| New guest resets the question count | low | rejected | A new guest is a new draft; each round needs Owner messages |
+| Unreadable model answer on a follow-up uses up a question | low | rejected | Minor; the same question is asked again |
+| Unsafe follow-up (several phones, stray digits) keeps the draft with the generic refusal | low | rejected | Draft is unchanged, which is the specified behaviour |
+| Parser rejection on a complete draft deletes it instead of asking for the bad value | low | rejected | Rare; the reason is given and the Owner retypes |
+| Phone alone with no draft starts a draft | low | rejected | Specified: a bare phone is a valid first step |
+| Two messages in flight at once | low | rejected | The Bot handles updates one at a time |
+| Draft read happens before refusal checks; expiry delete outside the Command's transaction | low | rejected | Harmless; no data is lost |
+| `bot_data["draft_ttl"]` read with `[]` | low | rejected | Always set by `build_application` |
 
 ## Design Notes
 

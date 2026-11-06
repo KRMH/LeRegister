@@ -5,10 +5,10 @@ from __future__ import annotations
 import dataclasses
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from leregister.adapters.store.db import Database, StoreError, iso_utc
-from leregister.core.events import BookingView, Decision, OutboxItem, ReplyRequest
+from leregister.core.events import BookingView, Decision, Draft, OutboxItem, ReplyRequest
 
 __all__ = ["SqliteStore", "StoreError"]
 
@@ -67,6 +67,10 @@ class SqliteStore(Database):
                         iso_utc(at),
                     ),
                 )
+                if decision.clear_draft:
+                    conn.execute("DELETE FROM drafts WHERE chat_id = ?", (chat_id,))
+                if decision.draft is not None:
+                    _write_draft(conn, chat_id, decision.draft, at)
                 conn.execute("COMMIT")
                 return True
             except BaseException:
@@ -75,6 +79,37 @@ class SqliteStore(Database):
                 raise
 
         return await self.run(work)
+
+    async def get_draft(self, chat_id: int, now: datetime, ttl: timedelta) -> Draft | None:
+        def work(conn: sqlite3.Connection) -> Draft | None:
+            row = conn.execute(
+                "SELECT chalet, name, phone, check_in_day, check_in_month, check_out_day, check_out_month,"
+                " questions_asked, updated_at FROM drafts WHERE chat_id = ?",
+                (chat_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            if row[8] < iso_utc(now - ttl):  # not changed within the time limit: gone for good
+                conn.execute("DELETE FROM drafts WHERE chat_id = ?", (chat_id,))
+                return None
+            return Draft(
+                chalet=row[0],
+                name=row[1],
+                phone=row[2],
+                check_in_day=row[3],
+                check_in_month=row[4],
+                check_out_day=row[5],
+                check_out_month=row[6],
+                questions_asked=row[7],
+            )
+
+        return await self.run(work)
+
+    async def purge_drafts(self, older_than: datetime) -> None:
+        def work(conn: sqlite3.Connection) -> None:
+            conn.execute("DELETE FROM drafts WHERE updated_at < ?", (iso_utc(older_than),))
+
+        await self.run(work)
 
     async def queue_reply(self, chat_id: int, reply: ReplyRequest, at: datetime) -> None:
         def work(conn: sqlite3.Connection) -> None:
@@ -127,6 +162,29 @@ class SqliteStore(Database):
             )
 
         await self.run(work)
+
+
+def _write_draft(conn: sqlite3.Connection, chat_id: int, draft: Draft, at: datetime) -> None:
+    conn.execute(
+        "INSERT INTO drafts (chat_id, chalet, name, phone, check_in_day, check_in_month, check_out_day,"
+        " check_out_month, questions_asked, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT (chat_id) DO UPDATE SET chalet = excluded.chalet, name = excluded.name,"
+        " phone = excluded.phone, check_in_day = excluded.check_in_day, check_in_month = excluded.check_in_month,"
+        " check_out_day = excluded.check_out_day, check_out_month = excluded.check_out_month,"
+        " questions_asked = excluded.questions_asked, updated_at = excluded.updated_at",
+        (
+            chat_id,
+            draft.chalet,
+            draft.name,
+            draft.phone,
+            draft.check_in_day,
+            draft.check_in_month,
+            draft.check_out_day,
+            draft.check_out_month,
+            draft.questions_asked,
+            iso_utc(at),
+        ),
+    )
 
 
 def _record_booking(conn: sqlite3.Connection, decision: Decision, at: datetime) -> tuple[int, bool]:

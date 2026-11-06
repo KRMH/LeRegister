@@ -325,7 +325,7 @@ def test_upgrade_from_schema_1_keeps_old_rows_and_closes_pending_previews(tmp_pa
 
     monkeypatch.setattr(db_module, "MIGRATIONS_DIR", real_dir)
     store = open_store(tmp_path)
-    assert rows(store, "SELECT version FROM schema_version") == [(1,), (2,)]
+    assert rows(store, "SELECT version FROM schema_version") == [(1,), (2,), (3,)]
     assert rows(store, "SELECT kind, status, booking_id FROM outbox ORDER BY id") == [
         ("new_preview", "done", None),
         ("rejected", "pending", None),

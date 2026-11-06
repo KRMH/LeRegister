@@ -29,6 +29,7 @@ class Settings:
     llm_provider: str = "groq"
     llm_model: str = DEFAULT_LLM_MODEL
     llm_timeout: float = 8.0
+    draft_minutes: int = 10
 
     @classmethod
     def load(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -45,6 +46,7 @@ class Settings:
             llm_provider=_provider(merged),
             llm_model=merged.get("LEREGISTER_LLM_MODEL", "").strip() or DEFAULT_LLM_MODEL,
             llm_timeout=_seconds(merged, "LEREGISTER_LLM_TIMEOUT", default=8.0),
+            draft_minutes=_draft_minutes(merged),
         )
 
 
@@ -125,4 +127,11 @@ def _seconds(env: Mapping[str, str], key: str, *, default: float) -> float:
         raise ConfigError(f"Setting {key} must be a number of seconds") from None
     if not 0 < value <= 60:
         raise ConfigError(f"Setting {key} must be between 0 and 60 seconds")
+    return value
+
+
+def _draft_minutes(env: Mapping[str, str]) -> int:
+    value = _integer(env, "LEREGISTER_DRAFT_MINUTES", default=10)
+    if value > 1440:
+        raise ConfigError("Setting LEREGISTER_DRAFT_MINUTES must be at most 1440 (one day)")
     return value

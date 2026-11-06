@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
@@ -19,6 +20,7 @@ from leregister.core.replies import render
 log = logging.getLogger(__name__)
 
 RETRY_INTERVAL_SECONDS = 5
+PURGE_INTERVAL_SECONDS = 60
 
 
 def build_application(
@@ -42,6 +44,7 @@ def build_application(
     app.bot_data["clock"] = clock
     app.bot_data["chalet_count"] = settings.chalet_count
     app.bot_data["max_stay"] = settings.max_stay
+    app.bot_data["draft_ttl"] = timedelta(minutes=settings.draft_minutes)
     app.bot_data["store"] = store
     async def send(chat_id: int, text: str) -> None:
         await app.bot.send_message(chat_id, text)
@@ -52,7 +55,13 @@ def build_application(
     app.add_error_handler(handle_error)
     if app.job_queue is not None:
         app.job_queue.run_repeating(retry_outbox, interval=RETRY_INTERVAL_SECONDS, first=RETRY_INTERVAL_SECONDS)
+        app.job_queue.run_repeating(purge_old_drafts, interval=PURGE_INTERVAL_SECONDS, first=1)
     return app
+
+
+async def purge_old_drafts(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Drafts hold a guest's name and phone: remove the ones nobody finished, even if no message ever comes."""
+    await context.bot_data["store"].purge_drafts(context.bot_data["clock"].now() - context.bot_data["draft_ttl"])
 
 
 async def retry_outbox(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -89,6 +98,7 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if update.edited_message is not None:
             decision = edited_message_decision()
         elif interpreter is not None and is_free_text(text):
+            draft = await store.get_draft(chat.id, clock.now(), context.bot_data["draft_ttl"])
             decision = await decide_free_text(
                 text,
                 update_id=update.update_id,
@@ -96,6 +106,7 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 chalet_count=context.bot_data["chalet_count"],
                 max_stay=context.bot_data["max_stay"],
                 interpreter=interpreter,
+                draft=draft,
             )
         else:
             decision = decide(
