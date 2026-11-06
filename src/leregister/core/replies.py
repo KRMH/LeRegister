@@ -48,6 +48,14 @@ def render(
         return EDIT_NOTICE
     if kind == "command_failed":
         return COMMAND_FAILED
+    if kind == "free_text_rejected":
+        reason = (journal_payload or {}).get("reason", "unknown")
+        return (
+            "I could not turn that into a booking.\n"
+            f"Problem: {reason}\n"
+            'Please give the exact dates (for example "from the 20th to the 23rd of december") '
+            f"and the phone with +, or use the strict format: {EXAMPLE}"
+        )
     if kind == "free_text_unavailable":
         return FREE_TEXT_UNAVAILABLE
     if kind == "free_text_proposal":

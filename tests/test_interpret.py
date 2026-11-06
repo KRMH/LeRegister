@@ -189,7 +189,7 @@ def test_no_phone_means_no_model_call():
     d = decide("chalet 2 for Sam from the 12th to the 15th of december", fake)
     assert fake.calls == []
     assert d.journal.payload["reason"].startswith("phone is missing")
-    assert d.reply.kind == "rejected"
+    assert d.reply.kind == "free_text_rejected"
 
 
 def test_two_phones_means_no_model_call():
@@ -203,13 +203,13 @@ def test_no_proposal_is_a_journaled_rejection(answer):
     d = decide(SENTENCE, FakeInterpreter(answer))
     assert d.journal.event_type.value == "command_rejected"
     assert d.journal.payload == {"reason": "that could not be turned into one booking"}
-    assert d.reply.kind == "rejected" and d.booking is None
+    assert d.reply.kind == "free_text_rejected" and d.booking is None
 
 
 def test_the_parser_stays_the_judge():
     d = decide(SENTENCE, FakeInterpreter({**GOOD, "chalet": 99}))
     assert d.journal.payload["reason"] == "chalet 99 is outside 1..40"
-    assert d.booking is None and d.reply.kind == "rejected"
+    assert d.booking is None and d.reply.kind == "free_text_rejected"
 
 
 def test_a_stay_over_the_maximum_is_rejected_by_the_parser():
@@ -356,7 +356,7 @@ def test_a_spaced_plus_number_the_library_rejects_is_still_fully_hidden():
 def test_other_long_digit_runs_are_refused_before_anything_is_sent(text):
     fake = FakeInterpreter(GOOD)
     d = decide(text, fake)
-    assert fake.calls == [] and d.booking is None and d.reply.kind == "rejected"
+    assert fake.calls == [] and d.booking is None and d.reply.kind == "free_text_rejected"
     assert "must start with +" in d.journal.payload["reason"]
 
 
@@ -438,3 +438,24 @@ def test_build_application_keeps_the_interpreter_and_closes_it_at_shutdown(tmp_p
     asyncio.run(app.post_shutdown(app))
     assert closable.closed
     store.close()
+
+
+def test_a_refused_sentence_gets_advice_that_fits_plain_words(tmp_path):
+    env = Env(tmp_path, FakeInterpreter({"command": "none"}))
+    env.send("chalet 4 for Lea next friday for 3 nights +96171555123")
+    (text,) = env.texts()
+    assert text == (
+        "I could not turn that into a booking.\n"
+        "Problem: that could not be turned into one booking\n"
+        'Please give the exact dates (for example "from the 20th to the 23rd of december") '
+        "and the phone with +, or use the strict format: New 2 Sam +96171123456 12-15 dec"
+    )
+    assert env.rows("SELECT payload FROM journal") == [('{"reason": "that could not be turned into one booking"}',)]
+
+
+def test_a_sentence_without_a_phone_gets_the_same_helpful_advice(tmp_path):
+    env = Env(tmp_path, FakeInterpreter(GOOD))
+    env.send("chalet 2 for Sam from the 12th to the 15th of december")
+    (text,) = env.texts()
+    assert text.startswith("I could not turn that into a booking.\nProblem: phone is missing")
+    assert env.interpreter.calls == []

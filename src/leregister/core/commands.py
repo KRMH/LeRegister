@@ -91,7 +91,7 @@ async def decide_free_text(
     return Decision(journal=None, reply=ReplyRequest("free_text_proposal", {"command": command}))
 
 
-def _rejection(update_id: int, clock: Clock, reason: str, *, reply_kind: str = "rejected") -> Decision:
+def _rejection(update_id: int, clock: Clock, reason: str, *, reply_kind: str = "free_text_rejected") -> Decision:
     entry = JournalEntry(
         at=clock.now(),
         event_type=EventType.COMMAND_REJECTED,
